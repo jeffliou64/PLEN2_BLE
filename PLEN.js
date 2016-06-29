@@ -1,6 +1,6 @@
 //  (1)  create more variables&properties (for clarity and accessibility)
 //  (2)  log EVERYTHING POSSIBLE (all steps of the connection/write)
-//  3)  separate functions for clarity (each function === 1 application/use)
+//  (3)  separate functions for clarity (each function === 1 application/use)
 //  4)  add comments for each function/key variables
 //  5)  create error class/module, add errors for every function
 //  6)  set up callback system if needed
