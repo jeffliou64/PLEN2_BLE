@@ -1,0 +1,7 @@
+{
+    "dependencies": {
+        "noble": "^1.6.0",
+        "buffer": "^4.7.0",
+        "prompt": "1.0.0"
+    }
+}
