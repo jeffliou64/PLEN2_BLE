@@ -1,5 +1,5 @@
-//  1)  create more variables&properties (for clarity and accessibility)
-//  2)  log EVERYTHING POSSIBLE (all steps of the connection/write)
+//  (1)  create more variables&properties (for clarity and accessibility)
+//  (2)  log EVERYTHING POSSIBLE (all steps of the connection/write)
 //  3)  separate functions for clarity (each function === 1 application/use)
 //  4)  add comments for each function/key variables
 //  5)  create error class/module, add errors for every function
@@ -10,6 +10,7 @@ var prompt = require('prompt');
 
 var Device = (function () {
     function Device(peripherial) {
+        //peripherial
         this.peripherial = null;
         //this.successConnectedCallback = null;
         this.BtCharacteristic = null;
@@ -19,8 +20,9 @@ var Device = (function () {
         this.name = undefined;
         this.paired = false;
         this.initialized = false;
+        this.peripherial = peripherial;
 
-        //this.plen_commands = fs.readFileSync('./commands.json', 'utf8');
+        this.plen_commands = fs.readFileSync('./commands.json', 'utf8');
     };
 
     Device.prototype.isReady = function () {
@@ -48,18 +50,18 @@ var Device = (function () {
         this.givePlenCommands();
     };
 
-    // Device.prototype.toString = function () {
-    //     return "PLEN: " + this.name;
-    // };
+    Device.prototype.toString = function () {
+        return "PLEN: " + this.name;
+    };
 
-    // Device.prototype.notificationCallback = function (data, isNotification) {
-    //     console.log('data: ' + data);
-    //     var stringData = device.toString();
-    //     console.log('data stringValue: ' + stringData);
-    // }
+    Device.prototype.notificationCallback = function (data, isNotification) {
+        console.log('data: ' + data);
+        var stringData = device.toString();
+        console.log('data stringValue: ' + stringData);
+    }
 
     Device.prototype.listPlenCommands = function () {
-        var data = fs.readFileSync('./commands.json', 'utf8');
+        //var data = fs.readFileSync('./commands.json', 'utf8');
         return console.log(this.plen_commands);
     }
 
@@ -68,22 +70,15 @@ var Device = (function () {
     Device.prototype.givePlenCommands = function () {
         var _this = this;
         var commandToWrite;
-        var loopStop = false;
+        //var loopStop = false;
         prompt.start();
         prompt.get('command', function (err, result) {
+            if (err) {
+                return console.log(err);
+            }
             var device = _this;
             console.log('command recieved: ' + result.command);
-
-            var rawdata = fs.readFileSync('./commands.json', 'utf8');
-            var parsedData = JSON.parse(rawdata);
-            var parsedData = JSON.parse(this.plen_commands);
-            console.log('commands array has been parsed');
-            var parsedDataLength = parsedData.length;
-            parsedData.forEach(function (index) {
-                //console.log('name: ' + index.name + 'id: ' + index.id);
-                //if (loopStop) {
-                //    return;
-                //}
+            Device.prototype.parseData(device.plen_commands).forEach(function (index) {
                 if (index.name.toUpperCase() === result.command.toUpperCase()) {
                     console.log('correct command code found');
                     commandToWrite = index.id;
@@ -92,7 +87,12 @@ var Device = (function () {
             });
             device.writeToPLEN(commandToWrite);
         });
-    }
+    };
+
+    Device.prototype.parseData = function (dataToParse) {
+        var parsedData = JSON.parse(dataToParse);
+        return parsedData;
+    };
 
     //  The function to encode from character to ascii, and write to the robot's write characteristic
     //  @param {command}: the command to be encoded and written
