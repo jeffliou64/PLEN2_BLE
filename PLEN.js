@@ -3,6 +3,7 @@
 //  3)  separate functions for clarity (each function === 1 application/use)
 //  4)  add comments for each function/key variables
 //  5)  create error class/module, add errors for every function
+//  6)  set up callback system if needed
 var fs = require('fs');
 var noble = require('noble');
 var buffer = require('Buffer');
@@ -116,13 +117,15 @@ var Device = (function () {
 
 
     //PLEN UUID's for pairing
-    Device.Primary_service_UUID = '180A';
+    Device.Device_Battery_UUID = '180F';
+    Device.Primary_Service_UUID = '180A';
     Device.Device_Service_UUID = 'E1F40469CFE143C1838DDDBC9DAFDDE6';
-    Device.UART_Service_UUID = 'E1F40469CFE143C1838DDDBC9DAFDDE6';
     Device.Bt_UUID = 'CF70EE7F2A264F62931F9087AB12552C';
     Device.Rx_UUID = '2ED17A59FC21488E9204503EB78158D7';
     Device.Tx_UUID = 'F90E9CFE7E0544A59D75F13644D6F645';
-
+    //PLEN services
+    Device.supportedServices = [Device.Device_Service_UUID,
+        Device.Primary_service_UUID];
 
     // setup the callback for discover peripherials:
     noble.on('discover', function (peripherial) {
@@ -135,6 +138,7 @@ var Device = (function () {
         var device = new Device(peripherial);
         device.name = localName;
         //device.successConnectedCallback = 'success';
+
         peripherial.connect(function (error) {
             if (error) {
                 console.log('connection error: ' + error);
@@ -142,42 +146,89 @@ var Device = (function () {
             }
             console.log('start searching for services ...');
             peripherial.discoverServices([], function (error, services) {
-                console.log('discovered service count: ' + services.length);
-                services.forEach(function (service) {
-                    console.log('service with uuid: ' + service.uuid);
-                    if (service.uuid.toUpperCase() == Device.UART_Service_UUID) {
-                        console.log('start searching for characteristics ...');
-                        service.discoverCharacteristics([], function (error, characteristics) {
-                            console.log('discovered characteristic count: ' + characteristics.length);
-                            characteristics.forEach(function (characteristic) {
-                                switch (characteristic.uuid.toUpperCase()) {
-                                    case Device.Bt_UUID:
-                                        console.log('Got characteristic: BT Addr');
-                                        device.BtCharacteristic = characteristic;
-                                        break;
-                                    case Device.Rx_UUID:
-                                        console.log('Got characteristic: RX Data');
-                                        device.RxCharacteristic = characteristic;
-                                        break;
-                                    case Device.Tx_UUID:
-                                        console.log('Got characteristic: TX Data');
-                                        device.TxCharacteristic = characteristic;
-                                        break;
-                                    default:
-                                        console.log('characteristic: ' + characteristic.uuid);
-                                };
-                                if (device.isReady()) {
-                                    console.log('READY');
-                                    device.initialize();
-                                };
-                            });
-                        });
-                    };
-
-                });
+                if (services.length < Device.supportedServices.length) {
+                    return false;
+                }
+                device.getServiceInformation(services);
             });
         });
     });
+
+    //function to read and pair services
+    //log discovered service count
+    //make sure the required services have been found (and log found services)
+    //return true if all found, false if anything else
+
+    Device.prototype.getServiceInformation = function (services) {
+        console.log('start searching for services ...');
+        var serviceWithCharacteristics = null;
+        var device = this;
+        console.log('discovered service count: ' + services.length);
+        services.forEach(function (service) {
+            console.log('service with uuid: ' + service.uuid);
+            switch (service.uuid.toUpperCase()) {
+                case Device.Primary_Service_UUID:
+                    console.log('found Service: Primary Service');
+                    break;
+                case Device.Device_Service_UUID:
+                    console.log('found Service: Device Service');
+                    serviceWithCharacteristics = Device.Device_Service_UUID;
+                    break;
+                case Device.Device_Battery_UUID:
+                    console.log('found Service: Battery Service');
+                    break;
+                default:
+                    console.log('found Service: ' + service.uuid);
+            };
+        });
+        device.getCharacteristicsInformation(services, serviceWithCharacteristics);
+
+    }; 
+
+    //function to read & pair characteristics
+    //log discovered characteristic count
+    //for each one, log and pair to the corresponding characteristic
+    //return once complete for initialization
+    Device.prototype.getCharacteristicsInformation = function (services, serviceWithCharacteristics) {
+        var _this = this;
+        console.log(serviceWithCharacteristics);
+        services.forEach(function (service) {
+            var device = _this;
+            console.log('searching for characteristics with service ' + service.uuid);
+            if (serviceWithCharacteristics == service.uuid.toUpperCase()) {
+                service.discoverCharacteristics([], function (error, characteristics) {
+                    var device = _this;
+                    console.log('discovered characteristic count: ' + characteristics.length);
+                    characteristics.forEach(function (characteristic) {
+                        switch (characteristic.uuid.toUpperCase()) {
+                            case Device.Bt_UUID:
+                                console.log('Found characteristic: BT Addr');
+                                device.BtCharacteristic = characteristic;
+                                break;
+                            case Device.Rx_UUID:
+                                console.log('Found characteristic: RX Data');
+                                device.RxCharacteristic = characteristic;
+                                break;
+                            case Device.Tx_UUID:
+                                console.log('Found characteristic: TX Data');
+                                device.TxCharacteristic = characteristic;
+                                break;
+                            default:
+                                console.log('characteristic: ' + characteristic.uuid);
+                        };
+                        console.log("ready?");
+                        if (device.isReady()) {
+                            console.log('READY');
+                            device.initialize();
+                        }
+                    });
+                });
+
+            };
+
+        });
+    };
+
 
     // setup the handler for stateChange:
     noble.on('stateChange', function (state) {
