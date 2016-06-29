@@ -89,6 +89,8 @@ var Device = (function () {
         });
     };
 
+    //  parses data from JSON files for analyzing by other functions (creates an array of objects)
+    //  @param {dataToParse}: the JSON file to be parsed (already read with readfile)
     Device.prototype.parseData = function (dataToParse) {
         var parsedData = JSON.parse(dataToParse);
         return parsedData;
@@ -105,7 +107,7 @@ var Device = (function () {
             ascii_command[index] = command.charCodeAt(index);
         }
 
-        var buffer = new Buffer((ascii_command));
+        var buffer = new Buffer(ascii_command);
         device.TxCharacteristic.write(buffer, true, function (error) {
             console.log("write error: " + error)
         });
