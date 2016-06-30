@@ -33,7 +33,7 @@ var Device = (function () {
     };
 
     Device.prototype.isReady = function () {
-        console.log(this.BtCharacteristic != null &&
+        return this.BtCharacteristic != null &&
             this.RxCharacteristic != null &&
             this.TxCharacteristic != null &&
             this.ManufacturerNameStringCharacteristic != null &&
@@ -41,8 +41,7 @@ var Device = (function () {
             this.SerialNumberStringCharacteristic != null &&
             this.FirmwareRevisionStringCharacteristic != null &&
             this.HardwareRevisionStringCharacteristic != null &&
-            this.BatteryLevelCharacteristic != null);
-        return;
+            this.BatteryLevelCharacteristic != null;
     };
 
     // The initialization process after all required charateristics had been discover
@@ -190,16 +189,6 @@ var Device = (function () {
         });
     };
 
-        //this.BtCharacteristic = null;
-        //this.RxCharacteristic = null;
-        //this.TxCharacteristic = null;
-        //this.ManufacturerNameStringCharacteristic = null;
-        //this.ModelNumberStringCharacteristic = null;
-        //this.SerialNumberStringCharacteristic = null;
-        //this.FirmwareRevisionStringCharacteristic = null;
-        //this.HardwareRevisionStringCharacteristic = null;
-        //this.BatteryLevelCharacteristic = null;
-
     //function to read & pair characteristics
     //log discovered characteristic count
     //for each one, log and pair to the corresponding characteristic
@@ -217,50 +206,40 @@ var Device = (function () {
             characteristics.forEach(function (characteristic) {
                 if (characteristic.uuid.toUpperCase() == Device.Manufacturer_Name_String_UUID) {
                     console.log(characteristic.uuid);
-                    device.ManufacturerNameStringCharacteristic == characteristic;
+                    device.ManufacturerNameStringCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Model_Number_String_UUID) {
                     console.log(characteristic.uuid);
-                    device.ModelNumberStringCharacteristic == characteristic;
+                    device.ModelNumberStringCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Serial_Number_String_UUID) {
                     console.log(characteristic.uuid);
-                    device.SerialNumberStringCharacteristic == characteristic;
+                    device.SerialNumberStringCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Firmware_Revision_String_UUID) {
                     console.log(characteristic.uuid);
-                    device.FirmwareRevisionStringCharacteristic == characteristic;
+                    device.FirmwareRevisionStringCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Hardware_Revision_String_UUID) {
                     console.log(characteristic.uuid);
-                    device.HardwareRevisionStringCharacteristic == characteristic;
+                    device.HardwareRevisionStringCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Bt_Characteristic_UUID) {
                     console.log(characteristic.uuid);
-                    device.BtCharacteristic == characteristic;
+                    device.BtCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Rx_Characteristic_UUID) {
                     console.log(characteristic.uuid);
-                    device.RxCharacteristic == characteristic;
+                    device.RxCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Tx_Characteristic_UUID) {
                     console.log(characteristic.uuid);
-                    device.TxCharacteristic == characteristic;
+                    device.TxCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Battery_level_UUID) {
                     console.log(characteristic.uuid);
-                    device.BatteryLevelCharacteristic == characteristic;
+                    device.BatteryLevelCharacteristic = characteristic;
                 }
-                console.log(device.BtCharacteristic + '' +
-                    device.RxCharacteristic + '' +
-                    device.TxCharacteristic + '' +
-                    device.ManufacturerNameStringCharacteristic + '' +
-                    device.ModelNumberStringCharacteristic + '' +
-                    device.SerialNumberStringCharacteristic + '' +
-                    device.FirmwareRevisionStringCharacteristic + '' +
-                    device.HardwareRevisionStringCharacteristic + '' +
-                    device.BatteryLevelCharacteristic
-                );
                 if (device.isReady()) {
                     console.log('READY');
                     device.initialize();
