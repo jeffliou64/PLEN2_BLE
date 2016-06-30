@@ -15,8 +15,14 @@ var Device = (function () {
         this.peripherial = null;
         //this.successConnectedCallback = null;
         this.BtCharacteristic = null;
-        this.TxCharacteristic = null;
         this.RxCharacteristic = null;
+        this.TxCharacteristic = null;
+        this.ManufacturerNameStringCharacteristic = null;
+        this.ModelNumberStringCharacteristic = null;
+        this.SerialNumberStringCharacteristic = null;
+        this.FirmwareRevisionStringCharacteristic = null;
+        this.HardwareRevisionStringCharacteristic = null;
+        this.BatteryLevelCharacteristic = null;
 
         this.name = undefined;
         this.paired = false;
@@ -27,9 +33,16 @@ var Device = (function () {
     };
 
     Device.prototype.isReady = function () {
-        return this.BtCharacteristic != null &&
+        console.log(this.BtCharacteristic != null &&
             this.RxCharacteristic != null &&
-            this.TxCharacteristic != null;
+            this.TxCharacteristic != null &&
+            this.ManufacturerNameStringCharacteristic != null &&
+            this.ModelNumberStringCharacteristic != null &&
+            this.SerialNumberStringCharacteristic != null &&
+            this.FirmwareRevisionStringCharacteristic != null &&
+            this.HardwareRevisionStringCharacteristic != null &&
+            this.BatteryLevelCharacteristic != null);
+        return;
     };
 
     // The initialization process after all required charateristics had been discover
@@ -120,12 +133,21 @@ var Device = (function () {
     Device.Device_Battery_UUID = '180F';
     Device.Primary_Service_UUID = '180A';
     Device.Device_Service_UUID = 'E1F40469CFE143C1838DDDBC9DAFDDE6';
-    Device.Bt_UUID = 'CF70EE7F2A264F62931F9087AB12552C';
-    Device.Rx_UUID = '2ED17A59FC21488E9204503EB78158D7';
-    Device.Tx_UUID = 'F90E9CFE7E0544A59D75F13644D6F645';
+    Device.Bt_Characteristic_UUID = 'CF70EE7F2A264F62931F9087AB12552C';
+    Device.Rx_Characteristic_UUID = '2ED17A59FC21488E9204503EB78158D7';
+    Device.Tx_Characteristic_UUID = 'F90E9CFE7E0544A59D75F13644D6F645';
+    Device.Manufacturer_Name_String_UUID = '2A29';
+    Device.Model_Number_String_UUID = '2A24';
+    Device.Serial_Number_String_UUID = '2A25';
+    Device.Firmware_Revision_String_UUID = '2A26';
+    Device.Hardware_Revision_String_UUID = '2A27';
+    Device.Battery_level_UUID = '2A19';
+
+
     //PLEN services
     Device.supportedServices = [Device.Device_Service_UUID,
-        Device.Primary_service_UUID];
+        Device.Primary_service_UUID,
+        Device.Device_Battery_UUID];
 
     // setup the callback for discover peripherials:
     noble.on('discover', function (peripherial) {
@@ -158,73 +180,92 @@ var Device = (function () {
     //log discovered service count
     //make sure the required services have been found (and log found services)
     //return true if all found, false if anything else
-
     Device.prototype.getServiceInformation = function (services) {
-        console.log('start searching for services ...');
-        var serviceWithCharacteristics = null;
-        var device = this;
+        //var serviceWithCharacteristics = null;
         console.log('discovered service count: ' + services.length);
+        this.paired = true;
+        var device = this;
         services.forEach(function (service) {
-            console.log('service with uuid: ' + service.uuid);
-            switch (service.uuid.toUpperCase()) {
-                case Device.Primary_Service_UUID:
-                    console.log('found Service: Primary Service');
-                    break;
-                case Device.Device_Service_UUID:
-                    console.log('found Service: Device Service');
-                    serviceWithCharacteristics = Device.Device_Service_UUID;
-                    break;
-                case Device.Device_Battery_UUID:
-                    console.log('found Service: Battery Service');
-                    break;
-                default:
-                    console.log('found Service: ' + service.uuid);
-            };
+            device.getCharacteristicsInformation(service);
         });
-        device.getCharacteristicsInformation(services, serviceWithCharacteristics);
+    };
 
-    }; 
+        //this.BtCharacteristic = null;
+        //this.RxCharacteristic = null;
+        //this.TxCharacteristic = null;
+        //this.ManufacturerNameStringCharacteristic = null;
+        //this.ModelNumberStringCharacteristic = null;
+        //this.SerialNumberStringCharacteristic = null;
+        //this.FirmwareRevisionStringCharacteristic = null;
+        //this.HardwareRevisionStringCharacteristic = null;
+        //this.BatteryLevelCharacteristic = null;
 
     //function to read & pair characteristics
     //log discovered characteristic count
     //for each one, log and pair to the corresponding characteristic
     //return once complete for initialization
-    Device.prototype.getCharacteristicsInformation = function (services, serviceWithCharacteristics) {
-        var _this = this;
-        console.log(serviceWithCharacteristics);
-        services.forEach(function (service) {
-            var device = _this;
-            console.log('searching for characteristics with service ' + service.uuid);
-            if (serviceWithCharacteristics == service.uuid.toUpperCase()) {
-                service.discoverCharacteristics([], function (error, characteristics) {
-                    var device = _this;
-                    console.log('discovered characteristic count: ' + characteristics.length);
-                    characteristics.forEach(function (characteristic) {
-                        switch (characteristic.uuid.toUpperCase()) {
-                            case Device.Bt_UUID:
-                                console.log('Found characteristic: BT Addr');
-                                device.BtCharacteristic = characteristic;
-                                break;
-                            case Device.Rx_UUID:
-                                console.log('Found characteristic: RX Data');
-                                device.RxCharacteristic = characteristic;
-                                break;
-                            case Device.Tx_UUID:
-                                console.log('Found characteristic: TX Data');
-                                device.TxCharacteristic = characteristic;
-                                break;
-                            default:
-                                console.log('characteristic: ' + characteristic.uuid);
-                        };
-                        console.log("ready?");
-                        if (device.isReady()) {
-                            console.log('READY');
-                            device.initialize();
-                        }
-                    });
-                });
-
-            };
+    Device.prototype.getCharacteristicsInformation = function (service) {
+        var device = this;
+        console.log('this: ' + this);
+        console.log('searching for characteristics with service ' + service.uuid);
+        service.discoverCharacteristics([], function (error, characteristics) {
+            //var device = _this;
+            if (error) {
+                return console.log(error);
+            }
+            console.log('discovered characteristic count: ' + characteristics.length);
+            characteristics.forEach(function (characteristic) {
+                if (characteristic.uuid.toUpperCase() == Device.Manufacturer_Name_String_UUID) {
+                    console.log(characteristic.uuid);
+                    device.ManufacturerNameStringCharacteristic == characteristic;
+                }
+                else if (characteristic.uuid.toUpperCase() == Device.Model_Number_String_UUID) {
+                    console.log(characteristic.uuid);
+                    device.ModelNumberStringCharacteristic == characteristic;
+                }
+                else if (characteristic.uuid.toUpperCase() == Device.Serial_Number_String_UUID) {
+                    console.log(characteristic.uuid);
+                    device.SerialNumberStringCharacteristic == characteristic;
+                }
+                else if (characteristic.uuid.toUpperCase() == Device.Firmware_Revision_String_UUID) {
+                    console.log(characteristic.uuid);
+                    device.FirmwareRevisionStringCharacteristic == characteristic;
+                }
+                else if (characteristic.uuid.toUpperCase() == Device.Hardware_Revision_String_UUID) {
+                    console.log(characteristic.uuid);
+                    device.HardwareRevisionStringCharacteristic == characteristic;
+                }
+                else if (characteristic.uuid.toUpperCase() == Device.Bt_Characteristic_UUID) {
+                    console.log(characteristic.uuid);
+                    device.BtCharacteristic == characteristic;
+                }
+                else if (characteristic.uuid.toUpperCase() == Device.Rx_Characteristic_UUID) {
+                    console.log(characteristic.uuid);
+                    device.RxCharacteristic == characteristic;
+                }
+                else if (characteristic.uuid.toUpperCase() == Device.Tx_Characteristic_UUID) {
+                    console.log(characteristic.uuid);
+                    device.TxCharacteristic == characteristic;
+                }
+                else if (characteristic.uuid.toUpperCase() == Device.Battery_level_UUID) {
+                    console.log(characteristic.uuid);
+                    device.BatteryLevelCharacteristic == characteristic;
+                }
+                console.log(device.BtCharacteristic + '' +
+                    device.RxCharacteristic + '' +
+                    device.TxCharacteristic + '' +
+                    device.ManufacturerNameStringCharacteristic + '' +
+                    device.ModelNumberStringCharacteristic + '' +
+                    device.SerialNumberStringCharacteristic + '' +
+                    device.FirmwareRevisionStringCharacteristic + '' +
+                    device.HardwareRevisionStringCharacteristic + '' +
+                    device.BatteryLevelCharacteristic
+                );
+                if (device.isReady()) {
+                    console.log('READY');
+                    device.initialize();
+                }
+            });
 
         });
     };
