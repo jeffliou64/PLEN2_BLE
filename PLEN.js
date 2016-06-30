@@ -9,6 +9,23 @@ var noble = require('noble');
 var buffer = require('Buffer');
 var prompt = require('prompt');
 
+var DeviceError = (function () {
+    function DeviceError(code, message) {
+        this.code = code;
+        this.message = message;
+    }
+
+    DeviceError.prototype.toString = function () {
+        return "DeviceError(" + this.code + ") message: " + this.message;
+    }
+    DeviceError.SERVICE_NOT_MATCHED = 501;
+    DeviceError.CHARACTERISTIC_NOT_MATCHED = 504;
+    DeviceError.REQUIRE_PAIRING = 401;
+    DeviceError.REVISION_NOT_MATCHED = 502;
+    DeviceError.UNEXPECTED_ERROR = 500;
+    return DeviceError;
+}());
+
 var Device = (function () {
     function Device(peripherial) {
         //peripherial
@@ -198,39 +215,30 @@ var Device = (function () {
             console.log('discovered characteristic count: ' + characteristics.length);
             characteristics.forEach(function (characteristic) {
                 if (characteristic.uuid.toUpperCase() == Device.Manufacturer_Name_String_UUID) {
-                    console.log(characteristic.uuid);
                     device.ManufacturerNameStringCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Model_Number_String_UUID) {
-                    console.log(characteristic.uuid);
                     device.ModelNumberStringCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Serial_Number_String_UUID) {
-                    console.log(characteristic.uuid);
                     device.SerialNumberStringCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Firmware_Revision_String_UUID) {
-                    console.log(characteristic.uuid);
                     device.FirmwareRevisionStringCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Hardware_Revision_String_UUID) {
-                    console.log(characteristic.uuid);
                     device.HardwareRevisionStringCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Bt_Characteristic_UUID) {
-                    console.log(characteristic.uuid);
                     device.BtCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Rx_Characteristic_UUID) {
-                    console.log(characteristic.uuid);
                     device.RxCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Tx_Characteristic_UUID) {
-                    console.log(characteristic.uuid);
                     device.TxCharacteristic = characteristic;
                 }
                 else if (characteristic.uuid.toUpperCase() == Device.Battery_level_UUID) {
-                    console.log(characteristic.uuid);
                     device.BatteryLevelCharacteristic = characteristic;
                 }
                 if (device.isReady()) {
@@ -252,6 +260,7 @@ var Device = (function () {
             noble.stopScanning();
         }
     });
+    return Device;
 } ());
 
 console.log("program running");
