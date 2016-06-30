@@ -2,12 +2,13 @@
 //  (2)  log EVERYTHING POSSIBLE (all steps of the connection/write)
 //  (3)  separate functions for clarity (each function === 1 application/use)
 //  (4)  add comments for each function/key variables
-//  5)  create error class/module, add errors for every function
+//  (5)  create error class/module, add errors for every function
 //  6)  set up callback system if needed
 var fs = require('fs');
 var noble = require('noble');
 var buffer = require('Buffer');
 var prompt = require('prompt');
+var q = require('q');
 
 var DeviceError = (function () {
     function DeviceError(code, message) {
@@ -21,7 +22,7 @@ var DeviceError = (function () {
     DeviceError.SERVICE_NOT_MATCHED = 501;
     DeviceError.CHARACTERISTIC_NOT_MATCHED = 504;
     DeviceError.REQUIRE_PAIRING = 401;
-    DeviceError.REVISION_NOT_MATCHED = 502;
+    DeviceError.SERVICE_NOT_ENOUGH = 505;
     DeviceError.UNEXPECTED_ERROR = 500;
     return DeviceError;
 }());
@@ -141,10 +142,72 @@ var Device = (function () {
         this.givePlenCommands();
     }
 
+    
+     // The Promise to get any readable characteristic from services
+     // @param services {[any]} The services to serach from
+    Device.prototype.promiseAnyReadableCharacteristic = function (services) {
+        var promises = [];
+        var device = this;
+        console.log('hello');
+        services.forEach(function (service) {
+            console.log('ello');
+            promises.push(device.promiseAnyReadableCharacteristicWithService(service));
+        });
+        return q.any(promises);
+    };
+
+    //  The Promise to get any readable characteristic from one service
+    //  @param service {any} The service to search
+    Device.prototype.promiseAnyReadableCharacteristicWithService = function (service) {
+        return q.Promise(function (resolve, reject, notify) {
+            service.discoverCharacteristics([], function (error, characteristics) {
+                if (error) {
+                    reject(new DeviceError(DeviceError.UNEXPECTED_ERROR, "cannot access the characteristics from the service: " + service.uuid));
+                }
+                var target = null;
+                characteristics.every(function (characteristic) {
+                    var readable = (characteristic.uuid.length);
+                    if (readable > 0) {
+                        console.log('o');
+                        target = characteristic;
+                        return false;
+                    }
+                    return true;
+                });
+                if (target) {
+                    console.log('e');
+                    resolve(target);
+                }
+                else {
+                    console.log('h');
+                    reject(new DeviceError(DeviceError.UNEXPECTED_ERROR, 'cannot find any readable characteristic'));
+                }
+            });
+        });
+    };
+
+    //  The Promise to read the data from the specified characteristic
+    //  @param characteristic {any} The characteristic to be read
+    //  @param errorCode {number} The error code for the error response (if error occurred when reading the characteristic)
+    //  @param errorMessage {string} The error message for the error response (if error occurred when reading the characteristic)
+    Device.prototype.promiseReadDataFromCharacteristic = function (characteristic, errorCode, errorMessage) {
+        var device = this;
+        return q.Promise(function (resolve, reject, notify) {
+            characteristic.read(function (error, data) {
+                if (error) {
+                    reject(new DeviceError(errorCode || DeviceError.UNEXPECTED_ERROR, errorMessage));
+                }
+                resolve(data);
+            });
+        });
+    };
+    //utilities function........?
+
+
     //  PLEN UUID's for pairing
     Device.Device_Battery_UUID = '180F';
-    Device.Primary_Service_UUID = '180A';
-    Device.Device_Service_UUID = 'E1F40469CFE143C1838DDDBC9DAFDDE6';
+    Device.Info_Service_UUID = '180A';
+    Device.Primary_Service_UUID = 'E1F40469CFE143C1838DDDBC9DAFDDE6';
     Device.Bt_Characteristic_UUID = 'CF70EE7F2A264F62931F9087AB12552C';
     Device.Rx_Characteristic_UUID = '2ED17A59FC21488E9204503EB78158D7';
     Device.Tx_Characteristic_UUID = 'F90E9CFE7E0544A59D75F13644D6F645';
@@ -155,42 +218,48 @@ var Device = (function () {
     Device.Hardware_Revision_String_UUID = '2A27';
     Device.Battery_level_UUID = '2A19';
     //  All supported plen services
-    Device.supportedServices = [Device.Device_Service_UUID,
-        Device.Primary_service_UUID,
+    Device.supportedServices = [Device.Primary_Service_UUID,
+        Device.Info_Service_UUID,
         Device.Device_Battery_UUID];
 
-    //	setup the callback for discover peripherials:
-    //  when a peripheral is discovered, sends to getServiceInformation() to get services
-    //  @param
-    noble.on('discover', function (peripherial) {
-        console.log('Got device');
-        if (peripherial.advertisement['localName'] != 'PLEND') {
-            return;
-        };
+    
+    //  The static method to get device with corresponding peripherial
+    //  @param peripheral {any} The discovered peripheral instance
+    //  @param success {function} The success callback. Will pass with a device instance corresponding to the peripheral
+    //  @param failed {function} The failed callback. Will pass with the original peripheral and the error code.
+    Device.deviceWithPeripherial = function (peripherial, success, failed) {
+        console.log("getting peripherial: " + peripherial);
+        console.log("advertisement: " + peripherial.advertisement);
         var localName = peripherial.advertisement['localName'];
-        console.log('Got device: ' + localName);
+        console.log("got device: PLEN (" + localName + ")");
         var device = new Device(peripherial);
         device.name = localName;
-        //device.successConnectedCallback = 'success';
-
-        peripherial.connect(function (error) {
-            if (error) {
-                console.log('connection error: ' + error);
-                return;
-            }
-            console.log('start searching for services ...');
-            peripherial.discoverServices([], function (error, services) {
+        //device.successConnectedCallback = success;
+        peripherial.discoverServices(Device.supportedServices, function (error, services) {
+            return device.promiseAnyReadableCharacteristic(services).then(function (characteristic) {
+                console.log('found characteristic: ' + characteristic.uuid);
+                return device.promiseReadDataFromCharacteristic(characteristic, DeviceError.REQUIRE_PAIRING, "cannot read data from characteristic: " + characteristic.uuid);
+            }).then(function (data) {
+                console.log('success read: ' + data);
+            }).then(function (version) {
+                console.log("tickleapp firware version: " + version);
+                // check for the number of the discovered services:
                 if (services.length < Device.supportedServices.length) {
-                    return false;
+                    throw new DeviceError(DeviceError.COMPASS_NOT_READY, 'not all services found');
                 }
                 device.getServiceInformation(services);
+            }).catch(function (error) {
+                console.log(error);
+                if (failed) {
+                    failed(peripherial, error.code);
+                }
             });
         });
-    });
+    };
 
     //  Makes sure all the required services have been found
     //  pairs device and sends to getCharacteristicsInformation() to pair characteristics
-    //  @param {services}: the services found in the discovered peripheral
+    //  @param {services}: the services found in the discovered peripherial
     Device.prototype.getServiceInformation = function (services) {
         //var serviceWithCharacteristics = null;
         console.log('discovered service count: ' + services.length);
@@ -255,11 +324,31 @@ var Device = (function () {
         console.log('state changed with value: ' + state);
         if (state == 'poweredOn') {
             console.log('start scanning!');
-            noble.startScanning([Device.Device_Service_UUID]);
+            noble.startScanning([Device.Primary_Service_UUID]);
         } else {
             noble.stopScanning();
         }
     });
+
+    //	setup the callback for discover peripherials:
+    //  when a peripherial is discovered, sends to getServiceInformation() to get services
+    //  @param
+    noble.on('discover', function (peripherial) {
+        console.log('Got device');
+        if (peripherial.advertisement['localName'] != 'PLEND') {
+            return;
+        };
+        var localName = peripherial.advertisement['localName'];
+        console.log('Got device: ' + localName);
+        var device = new Device(peripherial);
+        device.name = localName;
+        //device.successConnectedCallback = 'success';
+
+        peripherial.connect(function (error) {
+            Device.deviceWithPeripherial(peripherial);
+        });
+    });
+
     return Device;
 } ());
 
