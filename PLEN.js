@@ -1,7 +1,7 @@
 //  (1)  create more variables&properties (for clarity and accessibility)
 //  (2)  log EVERYTHING POSSIBLE (all steps of the connection/write)
 //  (3)  separate functions for clarity (each function === 1 application/use)
-//  4)  add comments for each function/key variables
+//  (4)  add comments for each function/key variables
 //  5)  create error class/module, add errors for every function
 //  6)  set up callback system if needed
 var fs = require('fs');
@@ -13,7 +13,7 @@ var Device = (function () {
     function Device(peripherial) {
         //peripherial
         this.peripherial = null;
-        //this.successConnectedCallback = null;
+        //all plen characteristics
         this.BtCharacteristic = null;
         this.RxCharacteristic = null;
         this.TxCharacteristic = null;
@@ -24,14 +24,17 @@ var Device = (function () {
         this.HardwareRevisionStringCharacteristic = null;
         this.BatteryLevelCharacteristic = null;
 
+        //flow control members
         this.name = undefined;
         this.paired = false;
         this.initialized = false;
         this.peripherial = peripherial;
-
+        //property of plen built-in commands
         this.plen_commands = fs.readFileSync('./commands.json', 'utf8');
     };
 
+    //  Checks that all characteristics are property identified and matched
+    //  @param {none} 
     Device.prototype.isReady = function () {
         return this.BtCharacteristic != null &&
             this.RxCharacteristic != null &&
@@ -44,18 +47,16 @@ var Device = (function () {
             this.BatteryLevelCharacteristic != null;
     };
 
-    // The initialization process after all required charateristics had been discover
+    //  The initialization process after all required charateristics had been discover
+    //  @param {none}
     Device.prototype.initialize = function () {
         if (this.initialized) {
             console.log('already initialized');
             return;
         }
-        // if (this.successConnectedCallback) {
-        //     this.successConnectedCallback(this);
-        // }
+
         this.initialized = true;
         console.log('device initialized');
-        //this.RxCharacteristic.on('read', device.notificationCallback('hex', true));
         this.RxCharacteristic.notify(true, function (error) { });
 
         console.log('ready for commands');
@@ -63,27 +64,24 @@ var Device = (function () {
         this.givePlenCommands();
     };
 
+    //  Returns the name of the plen device
+    //  @param {none}
     Device.prototype.toString = function () {
         return "PLEN: " + this.name;
     };
 
-    Device.prototype.notificationCallback = function (data, isNotification) {
-        console.log('data: ' + data);
-        var stringData = device.toString();
-        console.log('data stringValue: ' + stringData);
-    }
-
+    //  lists the array of build-in plen commands
+    //  @param {none}    
     Device.prototype.listPlenCommands = function () {
-        //var data = fs.readFileSync('./commands.json', 'utf8');
         return console.log(this.plen_commands);
     }
 
     //  The function to prompt the user to give commands
     //  takes result and sends to writeToPLEN to write to robot
+    //  @param {none}
     Device.prototype.givePlenCommands = function () {
         var _this = this;
         var commandToWrite;
-        //var loopStop = false;
         prompt.start();
         prompt.get('command', function (err, result) {
             if (err) {
@@ -95,21 +93,21 @@ var Device = (function () {
                 if (index.name.toUpperCase() === result.command.toUpperCase()) {
                     console.log('correct command code found');
                     commandToWrite = index.id;
-                    //loopStop = true;
                 }
             });
             device.writeToPLEN(commandToWrite);
         });
     };
 
-    //  parses data from JSON files for analyzing by other functions (creates an array of objects)
-    //  @param {dataToParse}: the JSON file to be parsed (already read with readfile)
+    //  Parses data from JSON files for analyzing by other functions (creates an array of objects)
+    //  @param {dataToParse}: the JSON file to be parsed (already read with device.plen_commands)
     Device.prototype.parseData = function (dataToParse) {
         var parsedData = JSON.parse(dataToParse);
         return parsedData;
     };
 
     //  The function to encode from character to ascii, and write to the robot's write characteristic
+    //  Writes to give the plen robot commands
     //  @param {command}: the command to be encoded and written
     Device.prototype.writeToPLEN = function (command) {
         var device = this;
@@ -119,7 +117,6 @@ var Device = (function () {
         for (index = 0; index < command_length; index++) {
             ascii_command[index] = command.charCodeAt(index);
         }
-
         var buffer = new Buffer(ascii_command);
         device.TxCharacteristic.write(buffer, true, function (error) {
             console.log("write error: " + error)
@@ -127,8 +124,7 @@ var Device = (function () {
         this.givePlenCommands();
     }
 
-
-    //PLEN UUID's for pairing
+    //  PLEN UUID's for pairing
     Device.Device_Battery_UUID = '180F';
     Device.Primary_Service_UUID = '180A';
     Device.Device_Service_UUID = 'E1F40469CFE143C1838DDDBC9DAFDDE6';
@@ -141,14 +137,14 @@ var Device = (function () {
     Device.Firmware_Revision_String_UUID = '2A26';
     Device.Hardware_Revision_String_UUID = '2A27';
     Device.Battery_level_UUID = '2A19';
-
-
-    //PLEN services
+    //  All supported plen services
     Device.supportedServices = [Device.Device_Service_UUID,
         Device.Primary_service_UUID,
         Device.Device_Battery_UUID];
 
-    // setup the callback for discover peripherials:
+    //	setup the callback for discover peripherials:
+    //  when a peripheral is discovered, sends to getServiceInformation() to get services
+    //  @param
     noble.on('discover', function (peripherial) {
         console.log('Got device');
         if (peripherial.advertisement['localName'] != 'PLEND') {
@@ -175,10 +171,9 @@ var Device = (function () {
         });
     });
 
-    //function to read and pair services
-    //log discovered service count
-    //make sure the required services have been found (and log found services)
-    //return true if all found, false if anything else
+    //  Makes sure all the required services have been found
+    //  pairs device and sends to getCharacteristicsInformation() to pair characteristics
+    //  @param {services}: the services found in the discovered peripheral
     Device.prototype.getServiceInformation = function (services) {
         //var serviceWithCharacteristics = null;
         console.log('discovered service count: ' + services.length);
@@ -189,16 +184,14 @@ var Device = (function () {
         });
     };
 
-    //function to read & pair characteristics
-    //log discovered characteristic count
-    //for each one, log and pair to the corresponding characteristic
-    //return once complete for initialization
+    //  Checks the service sent by getServiceInformation() and matches/pairs each characteristic
+    //  Once all characteristics are found & matched, device is initialized
+    //  @param {service}: the individual service to look at for characteristics
     Device.prototype.getCharacteristicsInformation = function (service) {
         var device = this;
         console.log('this: ' + this);
         console.log('searching for characteristics with service ' + service.uuid);
         service.discoverCharacteristics([], function (error, characteristics) {
-            //var device = _this;
             if (error) {
                 return console.log(error);
             }
@@ -249,7 +242,6 @@ var Device = (function () {
         });
     };
 
-
     // setup the handler for stateChange:
     noble.on('stateChange', function (state) {
         console.log('state changed with value: ' + state);
@@ -260,7 +252,6 @@ var Device = (function () {
             noble.stopScanning();
         }
     });
-    //return Device;
 } ());
 
 console.log("program running");
