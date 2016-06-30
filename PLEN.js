@@ -3,7 +3,8 @@
 //  (3)  separate functions for clarity (each function === 1 application/use)
 //  (4)  add comments for each function/key variables
 //  (5)  create error class/module, add errors for every function
-//  6)  set up callback system if needed
+//  6)  Add a disconnect feature (if PLEN disconnects at any point, stop instance & send stuff)
+//  7)  set up callback system if needed
 var fs = require('fs');
 var noble = require('noble');
 var buffer = require('Buffer');
@@ -24,8 +25,9 @@ var DeviceError = (function () {
     DeviceError.REQUIRE_PAIRING = 401;
     DeviceError.SERVICE_NOT_ENOUGH = 505;
     DeviceError.UNEXPECTED_ERROR = 500;
+    DeviceError.DISCONNECTED_ERROR = 999;
     return DeviceError;
-}());
+} ());
 
 var Device = (function () {
     function Device(peripherial) {
@@ -142,15 +144,12 @@ var Device = (function () {
         this.givePlenCommands();
     }
 
-    
-     // The Promise to get any readable characteristic from services
-     // @param services {[any]} The services to serach from
+    // The Promise to get any readable characteristic from services
+    // @param services {[any]} The services to serach from
     Device.prototype.promiseAnyReadableCharacteristic = function (services) {
         var promises = [];
         var device = this;
-        console.log('hello');
         services.forEach(function (service) {
-            console.log('ello');
             promises.push(device.promiseAnyReadableCharacteristicWithService(service));
         });
         return q.any(promises);
@@ -168,18 +167,15 @@ var Device = (function () {
                 characteristics.every(function (characteristic) {
                     var readable = (characteristic.uuid.length);
                     if (readable > 0) {
-                        console.log('o');
                         target = characteristic;
                         return false;
                     }
                     return true;
                 });
                 if (target) {
-                    console.log('e');
                     resolve(target);
                 }
                 else {
-                    console.log('h');
                     reject(new DeviceError(DeviceError.UNEXPECTED_ERROR, 'cannot find any readable characteristic'));
                 }
             });
@@ -201,8 +197,6 @@ var Device = (function () {
             });
         });
     };
-    //utilities function........?
-
 
     //  PLEN UUID's for pairing
     Device.Device_Battery_UUID = '180F';
@@ -222,7 +216,6 @@ var Device = (function () {
         Device.Info_Service_UUID,
         Device.Device_Battery_UUID];
 
-    
     //  The static method to get device with corresponding peripherial
     //  @param peripheral {any} The discovered peripheral instance
     //  @param success {function} The success callback. Will pass with a device instance corresponding to the peripheral
@@ -245,7 +238,7 @@ var Device = (function () {
                 console.log("tickleapp firware version: " + version);
                 // check for the number of the discovered services:
                 if (services.length < Device.supportedServices.length) {
-                    throw new DeviceError(DeviceError.COMPASS_NOT_READY, 'not all services found');
+                    throw new DeviceError(DeviceError.SERVICE_NOT_ENOUGH, 'not all services found');
                 }
                 device.getServiceInformation(services);
             }).catch(function (error) {
@@ -275,7 +268,6 @@ var Device = (function () {
     //  @param {service}: the individual service to look at for characteristics
     Device.prototype.getCharacteristicsInformation = function (service) {
         var device = this;
-        console.log('this: ' + this);
         console.log('searching for characteristics with service ' + service.uuid);
         service.discoverCharacteristics([], function (error, characteristics) {
             if (error) {
@@ -310,6 +302,10 @@ var Device = (function () {
                 else if (characteristic.uuid.toUpperCase() == Device.Battery_level_UUID) {
                     device.BatteryLevelCharacteristic = characteristic;
                 }
+                else {
+                    throw new DeviceError(DeviceError.CHARACTERISTIC_NOT_MATCHED, 'characteristic not matched');
+                }
+
                 if (device.isReady()) {
                     console.log('READY');
                     device.initialize();
@@ -343,10 +339,15 @@ var Device = (function () {
         var device = new Device(peripherial);
         device.name = localName;
         //device.successConnectedCallback = 'success';
-
         peripherial.connect(function (error) {
+            console.log('connected to peripheral: ' + peripherial.uuid);
             Device.deviceWithPeripherial(peripherial);
         });
+
+        //peripherial.disconnect(function (error) {
+        //    console.log('disconnected from peripheral: ' + peripherial.uuid);
+        //    throw new DeviceError(DeviceError.DISCONNECTED_ERROR , 'disconnected');
+        //})
     });
 
     return Device;
