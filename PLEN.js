@@ -2,9 +2,10 @@
 //  (2)  log EVERYTHING POSSIBLE (all steps of the connection/write)
 //  (3)  separate functions for clarity (each function === 1 application/use)
 //  (4)  add comments for each function/key variables
-//  (5)  create error class/module, add errors for every function
-//  6)  Add a disconnect feature (if PLEN disconnects at any point, stop instance & send stuff)
-//  7)  set up callback system if needed
+//  (5)  create error class/module, add errors for every connection-based function
+//  (6)  Add a disconnect feature (throws an error if the given command is "OFF")
+//  7)  Add a disconnect feature (if PLEN disconnects at any point, stop instance & send stuff)
+//  8)  set up callback system if needed
 var fs = require('fs');
 var noble = require('noble');
 var buffer = require('Buffer');
@@ -25,14 +26,16 @@ var DeviceError = (function () {
     DeviceError.REQUIRE_PAIRING = 401;
     DeviceError.SERVICE_NOT_ENOUGH = 505;
     DeviceError.UNEXPECTED_ERROR = 500;
-    DeviceError.DISCONNECTED_ERROR = 999;
+    DeviceError.DISCONNECTED_ERROR = 507;
+    DeviceError.COMMAND_INCORRECT = 506;
+    DeviceError.TURN_OFF = 508;
     return DeviceError;
 } ());
 
 var Device = (function () {
-    function Device(peripherial) {
-        //peripherial
-        this.peripherial = null;
+    function Device(peripheral) {
+        //peripheral
+        this.peripheral = null;
         //all plen characteristics
         this.BtCharacteristic = null;
         this.RxCharacteristic = null;
@@ -48,7 +51,7 @@ var Device = (function () {
         this.name = undefined;
         this.paired = false;
         this.initialized = false;
-        this.peripherial = peripherial;
+        this.peripheral = peripheral;
         //property of plen built-in commands
         this.plen_commands = fs.readFileSync('./commands.json', 'utf8');
     };
@@ -69,7 +72,7 @@ var Device = (function () {
 
     //  The initialization process after all required charateristics had been discover
     //  @param {none}
-    Device.prototype.initialize = function () {
+    Device.prototype.initialize = function (peripheral) {
         if (this.initialized) {
             console.log('already initialized');
             return;
@@ -81,7 +84,7 @@ var Device = (function () {
 
         console.log('ready for commands');
         this.listPlenCommands();
-        this.givePlenCommands();
+        this.givePlenCommands(peripheral);
     };
 
     //  Returns the name of the plen device
@@ -99,13 +102,17 @@ var Device = (function () {
     //  The function to prompt the user to give commands
     //  takes result and sends to writeToPLEN to write to robot
     //  @param {none}
-    Device.prototype.givePlenCommands = function () {
+    Device.prototype.givePlenCommands = function (peripheral) {
         var _this = this;
-        var commandToWrite;
+        var commandToWrite = null;
+        _this.checkForConnection(peripheral);
         prompt.start();
         prompt.get('command', function (err, result) {
             if (err) {
                 return console.log(err);
+            }
+            if (result.command.toUpperCase() == "OFF") {
+                throw new DeviceError(DeviceError.TURN_OFF, "turn off connection");
             }
             var device = _this;
             console.log('command recieved: ' + result.command);
@@ -115,7 +122,12 @@ var Device = (function () {
                     commandToWrite = index.id;
                 }
             });
-            device.writeToPLEN(commandToWrite);
+            if (commandToWrite == null) {
+                console.log("COMMAND INCORRECT");
+                device.givePlenCommands(peripheral);
+            } else {
+                device.writeToPLEN(commandToWrite, peripheral);
+            }
         });
     };
 
@@ -129,10 +141,11 @@ var Device = (function () {
     //  The function to encode from character to ascii, and write to the robot's write characteristic
     //  Writes to give the plen robot commands
     //  @param {command}: the command to be encoded and written
-    Device.prototype.writeToPLEN = function (command) {
+    Device.prototype.writeToPLEN = function (command, peripheral) {
         var device = this;
+        device.checkForConnection(peripheral);
         var command_length = command.length;
-        console.log('ready to write');
+        //console.log('ready to write');
         var ascii_command = [];
         for (index = 0; index < command_length; index++) {
             ascii_command[index] = command.charCodeAt(index);
@@ -141,7 +154,50 @@ var Device = (function () {
         device.TxCharacteristic.write(buffer, true, function (error) {
             console.log("write error: " + error)
         });
-        this.givePlenCommands();
+        this.givePlenCommands(peripheral);
+    }
+
+    Device.prototype.checkForConnection = function (peripheral) {
+        var device = this;
+        device.peripheral = peripheral;
+        console.log("peripheral rssissssss: " + device.peripheral.rssi);
+
+
+        noble.on('stateChange', function (state) {
+            console.log('state changed with value: ' + state);
+            if (state == 'poweredOff') {
+                console.log('connection lost..');
+                noble.stopScanning();
+                noble.startScanning([Device.Primary_Service_UUID]);
+            }
+        });
+        peripheral.updateRssi(function (error, rssi) {
+            console.log("Peripheral: " + device.peripheral);
+            console.log("peripheral rssi: " + device.peripheral.rssi);
+            if (device.peripheral.rssi > 0 || error || device.peripheral.rssi == undefined || device.peripheral.rssi == null) {
+                device.handleDisconnect(peripheral);
+            }
+        })
+    }
+
+
+    Device.prototype.handleDisconnect = function (peripheral) {
+        // if (err) {
+        //     console.log("error with disconnecting");
+        //     throw new DeviceError(DeviceError.DISCONNECTED_ERROR, "error with disconnecting");
+        // }
+        peripheral.disconnect(function (error) {
+            if (error) {
+                console.log("error with disconnecting");
+                throw new DeviceError(DeviceError.DISCONNECTED_ERROR, "error with disconnecting");
+            }
+        })
+
+        peripheral.once('disconnect', function () {
+            console.log('connection lost..');
+            noble.stopScanning();
+            noble.startScanning([Device.Primary_Service_UUID]);
+        })
     }
 
     // The Promise to get any readable characteristic from services
@@ -216,19 +272,19 @@ var Device = (function () {
         Device.Info_Service_UUID,
         Device.Device_Battery_UUID];
 
-    //  The static method to get device with corresponding peripherial
+    //  The static method to get device with corresponding peripheral
     //  @param peripheral {any} The discovered peripheral instance
     //  @param success {function} The success callback. Will pass with a device instance corresponding to the peripheral
     //  @param failed {function} The failed callback. Will pass with the original peripheral and the error code.
-    Device.deviceWithPeripherial = function (peripherial, success, failed) {
-        console.log("getting peripherial: " + peripherial);
-        console.log("advertisement: " + peripherial.advertisement);
-        var localName = peripherial.advertisement['localName'];
+    Device.deviceWithPeripheral = function (peripheral, success, failed) {
+        console.log("getting peripheral: " + peripheral);
+        console.log("advertisement: " + peripheral.advertisement);
+        var localName = peripheral.advertisement['localName'];
         console.log("got device: PLEN (" + localName + ")");
-        var device = new Device(peripherial);
+        var device = new Device(peripheral);
         device.name = localName;
         //device.successConnectedCallback = success;
-        peripherial.discoverServices(Device.supportedServices, function (error, services) {
+        peripheral.discoverServices(Device.supportedServices, function (error, services) {
             return device.promiseAnyReadableCharacteristic(services).then(function (characteristic) {
                 console.log('found characteristic: ' + characteristic.uuid);
                 return device.promiseReadDataFromCharacteristic(characteristic, DeviceError.REQUIRE_PAIRING, "cannot read data from characteristic: " + characteristic.uuid);
@@ -240,11 +296,11 @@ var Device = (function () {
                 if (services.length < Device.supportedServices.length) {
                     throw new DeviceError(DeviceError.SERVICE_NOT_ENOUGH, 'not all services found');
                 }
-                device.getServiceInformation(services);
+                device.getServiceInformation(peripheral, services);
             }).catch(function (error) {
                 console.log(error);
                 if (failed) {
-                    failed(peripherial, error.code);
+                    failed(peripheral, error.code);
                 }
             });
         });
@@ -252,21 +308,21 @@ var Device = (function () {
 
     //  Makes sure all the required services have been found
     //  pairs device and sends to getCharacteristicsInformation() to pair characteristics
-    //  @param {services}: the services found in the discovered peripherial
-    Device.prototype.getServiceInformation = function (services) {
+    //  @param {services}: the services found in the discovered peripheral
+    Device.prototype.getServiceInformation = function (peripheral, services) {
         //var serviceWithCharacteristics = null;
         console.log('discovered service count: ' + services.length);
         this.paired = true;
         var device = this;
         services.forEach(function (service) {
-            device.getCharacteristicsInformation(service);
+            device.getCharacteristicsInformation(peripheral, service);
         });
     };
 
     //  Checks the service sent by getServiceInformation() and matches/pairs each characteristic
     //  Once all characteristics are found & matched, device is initialized
     //  @param {service}: the individual service to look at for characteristics
-    Device.prototype.getCharacteristicsInformation = function (service) {
+    Device.prototype.getCharacteristicsInformation = function (peripheral, service) {
         var device = this;
         console.log('searching for characteristics with service ' + service.uuid);
         service.discoverCharacteristics([], function (error, characteristics) {
@@ -308,7 +364,7 @@ var Device = (function () {
 
                 if (device.isReady()) {
                     console.log('READY');
-                    device.initialize();
+                    device.initialize(peripheral);
                 }
             });
 
@@ -326,28 +382,29 @@ var Device = (function () {
         }
     });
 
-    //	setup the callback for discover peripherials:
-    //  when a peripherial is discovered, sends to getServiceInformation() to get services
+    //	setup the callback for discover peripherals:
+    //  when a peripheral is discovered, sends to getServiceInformation() to get services
     //  @param
-    noble.on('discover', function (peripherial) {
+    noble.on('discover', function (peripheral) {
         console.log('Got device');
-        if (peripherial.advertisement['localName'] != 'PLEND') {
+        if (peripheral.advertisement['localName'] != 'PLEND') {
             return;
         };
-        var localName = peripherial.advertisement['localName'];
+        var localName = peripheral.advertisement['localName'];
         console.log('Got device: ' + localName);
-        var device = new Device(peripherial);
+        var device = new Device(peripheral);
         device.name = localName;
         //device.successConnectedCallback = 'success';
-        peripherial.connect(function (error) {
-            console.log('connected to peripheral: ' + peripherial.uuid);
-            Device.deviceWithPeripherial(peripherial);
-        });
+        peripheral.connect(function (error) {
+            if (error != undefined) {
+                console.log(peripherail.uuid + ' RSSI:' + peripherail.rssi + ' Connecting, Error : ' + error);
+            } else {
+                console.log(peripheral.uuid + ' RSSI:' + peripheral.rssi);
+                console.log('connected to peripheral: ' + peripheral.uuid);
+                Device.deviceWithPeripheral(peripheral);
+            }
 
-        //peripherial.disconnect(function (error) {
-        //    console.log('disconnected from peripheral: ' + peripherial.uuid);
-        //    throw new DeviceError(DeviceError.DISCONNECTED_ERROR , 'disconnected');
-        //})
+        });
     });
 
     return Device;
