@@ -50,6 +50,7 @@ var Device = (function () {
         this.BatteryLevelCharacteristic = null;
 
         this.rssiUpdateAvailable = true;
+        this.disconnected = false;
 
         //flow control members
         this.name = undefined;
@@ -121,6 +122,9 @@ var Device = (function () {
         var _this = this;
         var commandToWrite = null;
         _this.checkForConnection(peripheral);
+        if (this.disconnected == true) {
+            return;
+        }
         prompt.start();
         prompt.get('command', function (err, result) {
             if (err) {
@@ -188,25 +192,11 @@ var Device = (function () {
 
 
     Device.prototype.handleDisconnect = function (peripheral) {
-        // if (err) {
-        //     console.log("error with disconnecting");
-        //     throw new DeviceError(DeviceError.DISCONNECTED_ERROR, "error with disconnecting");
-        // }
+        var device = this;
         console.log('DISCONNECTING');
-        throw new DeviceError(DeviceError.TURN_OFF, "DEVICE TURNED OFF");
-        // peripheral.disconnect(function (error) {
-        //     if (error) {
-        //         console.log("error with disconnecting");
-        //         throw new DeviceError(DeviceError.DISCONNECTED_ERROR, "error with disconnecting");
-        //     }
-            
-        // })
-
-        // peripheral.once('disconnect', function () {
-        //     console.log('connection lost..');
-        //     noble.stopScanning();
-        //     noble.startScanning([Device.Primary_Service_UUID]);
-        // })
+        device.disconnected = true;
+        console.log('start scanning!');
+        noble.startScanning([Device.Primary_Service_UUID]);
     }
 
     // The Promise to get any readable characteristic from services
