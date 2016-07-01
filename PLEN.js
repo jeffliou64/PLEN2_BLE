@@ -11,6 +11,8 @@ var noble = require('noble');
 var buffer = require('Buffer');
 var prompt = require('prompt');
 var q = require('q');
+//var window = require('window');
+
 
 var DeviceError = (function () {
     function DeviceError(code, message) {
@@ -47,6 +49,8 @@ var Device = (function () {
         this.HardwareRevisionStringCharacteristic = null;
         this.BatteryLevelCharacteristic = null;
 
+        this.rssiUpdateAvailable = true;
+
         //flow control members
         this.name = undefined;
         this.paired = false;
@@ -69,6 +73,17 @@ var Device = (function () {
             this.HardwareRevisionStringCharacteristic != null &&
             this.BatteryLevelCharacteristic != null;
     };
+
+
+    // Device.window.setTimeout(function (peripheral) {
+    //     peripheral.updateRssi(function (error, rssi) {
+    //         console.log("Peripheral: " + device.peripheral);
+    //         console.log("peripheral rssi: " + device.peripheral.rssi);
+    //         if (device.peripheral.rssi > 0 || error || device.peripheral.rssi == undefined || device.peripheral.rssi == null) {
+    //             device.handleDisconnect(peripheral);
+    //         }
+    //     })
+    // }, 1000);
 
     //  The initialization process after all required charateristics had been discover
     //  @param {none}
@@ -160,23 +175,14 @@ var Device = (function () {
     Device.prototype.checkForConnection = function (peripheral) {
         var device = this;
         device.peripheral = peripheral;
-        console.log("peripheral rssissssss: " + device.peripheral.rssi);
-
-
-        noble.on('stateChange', function (state) {
-            console.log('state changed with value: ' + state);
-            if (state == 'poweredOff') {
-                console.log('connection lost..');
-                noble.stopScanning();
-                noble.startScanning([Device.Primary_Service_UUID]);
-            }
-        });
+        console.log("Peripheral: " + device.peripheral);
+        console.log("peripheral rssi: " + device.peripheral.rssi);
+        if (device.peripheral.state != 'connected') {
+            device.handleDisconnect(peripheral);
+        }
         peripheral.updateRssi(function (error, rssi) {
             console.log("Peripheral: " + device.peripheral);
             console.log("peripheral rssi: " + device.peripheral.rssi);
-            if (device.peripheral.rssi > 0 || error || device.peripheral.rssi == undefined || device.peripheral.rssi == null) {
-                device.handleDisconnect(peripheral);
-            }
         })
     }
 
@@ -186,18 +192,21 @@ var Device = (function () {
         //     console.log("error with disconnecting");
         //     throw new DeviceError(DeviceError.DISCONNECTED_ERROR, "error with disconnecting");
         // }
-        peripheral.disconnect(function (error) {
-            if (error) {
-                console.log("error with disconnecting");
-                throw new DeviceError(DeviceError.DISCONNECTED_ERROR, "error with disconnecting");
-            }
-        })
+        console.log('DISCONNECTING');
+        throw new DeviceError(DeviceError.TURN_OFF, "DEVICE TURNED OFF");
+        // peripheral.disconnect(function (error) {
+        //     if (error) {
+        //         console.log("error with disconnecting");
+        //         throw new DeviceError(DeviceError.DISCONNECTED_ERROR, "error with disconnecting");
+        //     }
+            
+        // })
 
-        peripheral.once('disconnect', function () {
-            console.log('connection lost..');
-            noble.stopScanning();
-            noble.startScanning([Device.Primary_Service_UUID]);
-        })
+        // peripheral.once('disconnect', function () {
+        //     console.log('connection lost..');
+        //     noble.stopScanning();
+        //     noble.startScanning([Device.Primary_Service_UUID]);
+        // })
     }
 
     // The Promise to get any readable characteristic from services
