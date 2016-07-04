@@ -4,8 +4,9 @@
 //  (4)  add comments for each function/key variables
 //  (5)  create error class/module, add errors for every connection-based function
 //  (6)  Add a disconnect feature (throws an error if the given command is "OFF")
-//  7)  Add a disconnect feature (if PLEN disconnects at any point, stop instance & send stuff)
-//  8)  set up callback system if needed
+//  (7)  Add a disconnect feature (if PLEN disconnects at any point, stop instance & send stuff)
+//  (8)  Add a reconnect feature (if PLEN disconnects from (7), then the system starts scanning again)
+//  9)  set up callback system if needed
 var fs = require('fs');
 var noble = require('noble');
 var buffer = require('Buffer');
@@ -19,7 +20,7 @@ var DeviceError = (function () {
         this.code = code;
         this.message = message;
     }
-
+    
     DeviceError.prototype.toString = function () {
         return "DeviceError(" + this.code + ") message: " + this.message;
     }
@@ -48,10 +49,10 @@ var Device = (function () {
         this.FirmwareRevisionStringCharacteristic = null;
         this.HardwareRevisionStringCharacteristic = null;
         this.BatteryLevelCharacteristic = null;
-
+        
         this.rssiUpdateAvailable = true;
         this.disconnected = false;
-
+        
         //flow control members
         this.name = undefined;
         this.paired = false;
@@ -60,7 +61,7 @@ var Device = (function () {
         //property of plen built-in commands
         this.plen_commands = fs.readFileSync('./commands.json', 'utf8');
     };
-
+    
     //  Checks that all characteristics are property identified and matched
     //  @param {none} 
     Device.prototype.isReady = function () {
@@ -74,8 +75,8 @@ var Device = (function () {
             this.HardwareRevisionStringCharacteristic != null &&
             this.BatteryLevelCharacteristic != null;
     };
-
-
+    
+    
     // Device.window.setTimeout(function (peripheral) {
     //     peripheral.updateRssi(function (error, rssi) {
     //         console.log("Peripheral: " + device.peripheral);
@@ -93,35 +94,35 @@ var Device = (function () {
             console.log('already initialized');
             return;
         }
-
+        
         this.initialized = true;
         console.log('device initialized');
         this.RxCharacteristic.notify(true, function (error) { });
-
+        
         console.log('ready for commands');
         this.listPlenCommands();
         this.givePlenCommands(peripheral);
     };
-
+    
     //  Returns the name of the plen device
     //  @param {none}
     Device.prototype.toString = function () {
         return "PLEN: " + this.name;
     };
-
+    
     //  lists the array of build-in plen commands
     //  @param {none}    
     Device.prototype.listPlenCommands = function () {
         return console.log(this.plen_commands);
     }
-
+    
     //  The function to prompt the user to give commands
     //  takes result and sends to writeToPLEN to write to robot
     //  @param {none}
     Device.prototype.givePlenCommands = function (peripheral) {
         var _this = this;
         var commandToWrite = null;
-        _this.checkForConnection(peripheral);
+        //_this.checkForConnection(peripheral);
         if (this.disconnected == true) {
             return;
         }
@@ -135,7 +136,7 @@ var Device = (function () {
             }
             var device = _this;
             console.log('command recieved: ' + result.command);
-            Device.prototype.parseData(device.plen_commands).forEach(function (index) {
+            Device.parseData(device.plen_commands).forEach(function (index) {
                 if (index.name.toUpperCase() === result.command.toUpperCase()) {
                     console.log('correct command code found');
                     commandToWrite = index.id;
@@ -149,33 +150,33 @@ var Device = (function () {
             }
         });
     };
-
+    
     //  Parses data from JSON files for analyzing by other functions (creates an array of objects)
     //  @param {dataToParse}: the JSON file to be parsed (already read with device.plen_commands)
     Device.prototype.parseData = function (dataToParse) {
         var parsedData = JSON.parse(dataToParse);
         return parsedData;
     };
-
+    
     //  The function to encode from character to ascii, and write to the robot's write characteristic
     //  Writes to give the plen robot commands
     //  @param {command}: the command to be encoded and written
     Device.prototype.writeToPLEN = function (command, peripheral) {
         var device = this;
         device.checkForConnection(peripheral);
-        var command_length = command.length;
         //console.log('ready to write');
         var ascii_command = [];
-        for (index = 0; index < command_length; index++) {
+        for (index = 0; index < command.length; index++) {
             ascii_command[index] = command.charCodeAt(index);
         }
         var buffer = new Buffer(ascii_command);
+        console.log("writing buffer: " + buffer);
         device.TxCharacteristic.write(buffer, true, function (error) {
             console.log("write error: " + error)
         });
         this.givePlenCommands(peripheral);
     }
-
+    
     Device.prototype.checkForConnection = function (peripheral) {
         var device = this;
         device.peripheral = peripheral;
@@ -189,8 +190,8 @@ var Device = (function () {
             console.log("peripheral rssi: " + device.peripheral.rssi);
         })
     }
-
-
+    
+    
     Device.prototype.handleDisconnect = function (peripheral) {
         var device = this;
         console.log('DISCONNECTING');
@@ -198,7 +199,7 @@ var Device = (function () {
         console.log('start scanning!');
         noble.startScanning([Device.Primary_Service_UUID]);
     }
-
+    
     // The Promise to get any readable characteristic from services
     // @param services {[any]} The services to serach from
     Device.prototype.promiseAnyReadableCharacteristic = function (services) {
@@ -209,7 +210,7 @@ var Device = (function () {
         });
         return q.any(promises);
     };
-
+    
     //  The Promise to get any readable characteristic from one service
     //  @param service {any} The service to search
     Device.prototype.promiseAnyReadableCharacteristicWithService = function (service) {
@@ -236,7 +237,7 @@ var Device = (function () {
             });
         });
     };
-
+    
     //  The Promise to read the data from the specified characteristic
     //  @param characteristic {any} The characteristic to be read
     //  @param errorCode {number} The error code for the error response (if error occurred when reading the characteristic)
@@ -252,7 +253,7 @@ var Device = (function () {
             });
         });
     };
-
+    
     //  PLEN UUID's for pairing
     Device.Device_Battery_UUID = '180F';
     Device.Info_Service_UUID = '180A';
@@ -270,7 +271,7 @@ var Device = (function () {
     Device.supportedServices = [Device.Primary_Service_UUID,
         Device.Info_Service_UUID,
         Device.Device_Battery_UUID];
-
+        
     //  The static method to get device with corresponding peripheral
     //  @param peripheral {any} The discovered peripheral instance
     //  @param success {function} The success callback. Will pass with a device instance corresponding to the peripheral
@@ -290,7 +291,7 @@ var Device = (function () {
             }).then(function (data) {
                 console.log('success read: ' + data);
             }).then(function (version) {
-                console.log("tickleapp firware version: " + version);
+                console.log("tickleapp firmware version: " + version);
                 // check for the number of the discovered services:
                 if (services.length < Device.supportedServices.length) {
                     throw new DeviceError(DeviceError.SERVICE_NOT_ENOUGH, 'not all services found');
@@ -304,7 +305,7 @@ var Device = (function () {
             });
         });
     };
-
+    
     //  Makes sure all the required services have been found
     //  pairs device and sends to getCharacteristicsInformation() to pair characteristics
     //  @param {services}: the services found in the discovered peripheral
@@ -317,7 +318,7 @@ var Device = (function () {
             device.getCharacteristicsInformation(peripheral, service);
         });
     };
-
+    
     //  Checks the service sent by getServiceInformation() and matches/pairs each characteristic
     //  Once all characteristics are found & matched, device is initialized
     //  @param {service}: the individual service to look at for characteristics
@@ -369,7 +370,7 @@ var Device = (function () {
 
         });
     };
-
+    
     // setup the handler for stateChange:
     noble.on('stateChange', function (state) {
         console.log('state changed with value: ' + state);
@@ -380,7 +381,7 @@ var Device = (function () {
             noble.stopScanning();
         }
     });
-
+    
     //	setup the callback for discover peripherals:
     //  when a peripheral is discovered, sends to getServiceInformation() to get services
     //  @param
@@ -405,7 +406,7 @@ var Device = (function () {
 
         });
     });
-
+    
     return Device;
 } ());
 
